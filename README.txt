@@ -34,6 +34,7 @@
 
     #To test the application:
         Open "http://localhost:4000/public/upload.html" in the browser after running the application,where get a form in which we give the directoryId's and uploadFileName.
+        here for frontend i didnt used reactjs. Simply made it using html,js
 
 
 
