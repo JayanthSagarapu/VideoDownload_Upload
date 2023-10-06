@@ -1,4 +1,5 @@
 const downloadDirectoryId = document.getElementById("downloadDirectoryId");
+const fileNumber = document.getElementById("fileNumber");
 const uploadDirectoryId = document.getElementById("uploadDirectoryId");
 const uploadFileName = document.getElementById("uploadFileName");
 const uploadStatus = document.getElementById("uploadStatus");
@@ -6,6 +7,7 @@ const uploadStatus = document.getElementById("uploadStatus");
 async function downloadAndUpload() {
   const requestData = {
     downloadDirectoryId: downloadDirectoryId.value,
+    fileNumber: fileNumber.value,
     uploadDirectoryId: uploadDirectoryId.value,
     uploadFileName: uploadFileName.value,
   };

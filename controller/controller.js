@@ -20,7 +20,10 @@ auth = new JWT({
 //Downling video file from first directory using googleApi
 const downloadFile = async (fileID, fileName) => {
   const drive = google.drive({ version: "v3", auth });
+
+  //created a filepath to store the file
   const filePath = `c:\\Users\\sjaya\\Desktop\\${fileName}.mp4`;
+
   try {
     //getting the video that to be downloded in arraybuffer form
     const res = await drive.files.get(
@@ -37,7 +40,9 @@ const downloadFile = async (fileID, fileName) => {
     fs.writeFileSync(filePath, downloadedFile);
 
     console.log("Downloaded");
+
     downloaded = true;
+
     return downloadedFile;
   } catch (err) {
     console.log(err);
@@ -46,32 +51,57 @@ const downloadFile = async (fileID, fileName) => {
 };
 
 //uploading video to uploadDirectory with a uploadfileName
-const uploadFile = async (filePath, uploadDirectoryId, uploadFileName) => {
+const uploadFileInChunks = async (
+  filePath,
+  uploadDirectoryId,
+  uploadFileName
+) => {
   const drive = google.drive({ version: "v3", auth });
 
-  //Obtaining the video from the previous stored downloaded file
-  const videoFile = fs.createReadStream(filePath);
+  //Getting the fileSize and considering the chunk size as 5mb and counting number of chunks the file can be breaked into
+  const fileSize = fs.statSync(filePath).size;
+  const chunkSize = 5 * 1024 * 1024; //5Mb chunks
+  const numberOfChunks = Math.ceil(fileSize / chunkSize);
 
-  const requestBody = {
-    name: uploadFileName,
-    parents: [uploadDirectoryId],
-  };
+  //Function to upload next chunk for each iteration from start to end of number of chunks
+  let currentChunk = 1;
 
-  const media = {
-    mimeType: "video/mp4",
-    body: videoFile,
+  const nextChunkUpload = async () => {
+    let start = (currentChunk - 1) * chunkSize;
+    let end = currentChunk * chunkSize;
+
+    const chunkFiles = fs.createReadStream(filePath, { start, end });
+
+    const requestBody = {
+      name: uploadFileName,
+      parents: [uploadDirectoryId],
+    };
+
+    const media = {
+      mimeType: "video/mp4",
+      body: chunkFiles,
+    };
+    try {
+      //uploading or creating file for each chunk
+      const file = await drive.files.create({
+        requestBody,
+        media,
+      });
+
+      //checking and updating the currentChunk and again calling the nextChunkupload function
+      if (currentChunk < numberOfChunks) {
+        currentChunk++;
+        nextChunkUpload();
+      } else {
+        console.log("All chunks Uploaded");
+        return true;
+      }
+    } catch (err) {
+      console.log("Error in chunks upload", err);
+      throw err;
+    }
   };
-  try {
-    const file = await drive.files.create({
-      requestBody,
-      media,
-    });
-    console.log("uploaded", file.data);
-    uploaded = true;
-  } catch (err) {
-    console.log(err);
-    throw err;
-  }
+  uploaded = nextChunkUpload();
 };
 
 //To get all the files in the given directory id, so that we choose which file to download
@@ -91,18 +121,20 @@ const directoryAllFiles = async (directoryId) => {
 
 //Download and Upload of file from one directory to other directory
 const downloadAndUpload = async (req, res) => {
-  const { downloadDirectoryId, uploadDirectoryId, uploadFileName } = req.body;
+  const { downloadDirectoryId, fileNumber, uploadDirectoryId, uploadFileName } =
+    req.body;
   try {
+    //geting the list of files in directory and choosing the specified file
     const filesInDownloadDirectory = await directoryAllFiles(
       downloadDirectoryId
     );
-    const fileToDownload = filesInDownloadDirectory[0];
+    const fileToDownload = filesInDownloadDirectory[fileNumber - 1];
 
     await downloadFile(fileToDownload.id, uploadFileName);
 
     const filePath = `c:\\Users\\sjaya\\Desktop\\${uploadFileName}.mp4`;
 
-    await uploadFile(filePath, uploadDirectoryId, uploadFileName);
+    await uploadFileInChunks(filePath, uploadDirectoryId, uploadFileName);
 
     res.json({ status: "Downloaded & Uploaded File" });
   } catch (err) {
@@ -114,7 +146,8 @@ const downloadAndUpload = async (req, res) => {
 //to get the status of the process
 const getStatus = async (req, res) => {
   try {
-    var status = downloaded && uploaded ? "Downloaded and Uploaded" : "Pending";
+    var status =
+      downloaded && uploaded ? "Downloaded and Uploaded" : "Pending...";
     res.json({ status: status });
   } catch (error) {
     console.log(error);
